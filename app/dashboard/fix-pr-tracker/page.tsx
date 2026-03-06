@@ -1,18 +1,18 @@
 "use client"
 
 import { ExternalLink, GitPullRequest, GitMerge, XCircle, Clock } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
-const prs = [
-  { id: 42, repo: "api-service", title: "Fix SQL Injection in src/db/queries.py", severity: "Critical", status: "Open", branch: "shieldci/fix-sql-injection", raised: "2 min ago", url: "#" },
-  { id: 41, repo: "frontend", title: "Fix XSS vulnerability in auth/middleware.js", severity: "High", status: "Merged", branch: "shieldci/fix-xss-middleware", raised: "8 min ago", url: "#" },
-  { id: 40, repo: "infra", title: "Remove hardcoded secret in .env.example", severity: "High", status: "Open", branch: "shieldci/fix-hardcoded-secret", raised: "2 hr ago", url: "#" },
-  { id: 39, repo: "api-service", title: "Fix IDOR vulnerability in routes/user.py", severity: "High", status: "Merged", branch: "shieldci/fix-idor-user-route", raised: "1 day ago", url: "#" },
-  { id: 38, repo: "frontend", title: "Fix token exposure in hooks/useAuth.ts", severity: "Critical", status: "Rejected", branch: "shieldci/fix-token-exposure", raised: "2 days ago", url: "#" },
-  { id: 37, repo: "api-service", title: "Fix path traversal in utils/sanitize.py", severity: "Medium", status: "Merged", branch: "shieldci/fix-path-traversal", raised: "3 days ago", url: "#" },
-  { id: 36, repo: "frontend", title: "Fix CSRF in components/Form.tsx", severity: "Medium", status: "Open", branch: "shieldci/fix-csrf-form", raised: "4 days ago", url: "#" },
-  { id: 35, repo: "infra", title: "Fix nginx misconfiguration", severity: "Low", status: "Merged", branch: "shieldci/fix-nginx-config", raised: "5 days ago", url: "#" },
-]
+function timeAgo(dateStr: string): string {
+  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
+  if (seconds < 60) return `${seconds}s ago`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes} min ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} hr ago`
+  const days = Math.floor(hours / 24)
+  return `${days} day${days > 1 ? "s" : ""} ago`
+}
 
 const severityConfig: Record<string, { color: string; bg: string; border: string }> = {
   Critical: { color: "#ef4444", bg: "rgba(239,68,68,0.12)", border: "rgba(239,68,68,0.3)" },
@@ -28,7 +28,30 @@ const statusConfig: Record<string, { color: string; bg: string; icon: any }> = {
 }
 
 export default function FixPRTrackerPage() {
+  const [prs, setPrs] = useState<any[]>([])
   const [statusFilter, setStatusFilter] = useState("All")
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    // Load vulnerabilities and map them as "fix PR" entries
+    fetch("/api/vulnerabilities")
+      .then(res => res.json())
+      .then(data => {
+        const items = (data.vulnerabilities || []).map((v: any, i: number) => ({
+          id: i + 1,
+          repo: v.repo || "",
+          title: `Fix ${v.type || "issue"} in ${v.file || "unknown"}`,
+          severity: v.severity || "Medium",
+          status: v.status === "Resolved" ? "Merged" : v.status === "Fix PR Raised" ? "Open" : "Open",
+          branch: `shieldci/fix-${(v.type || "issue").toLowerCase().replace(/\s+/g, "-")}`,
+          raised: v.createdAt ? timeAgo(v.createdAt) : "",
+          url: v.fixPrUrl || "#",
+        }))
+        setPrs(items)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
 
   const filtered = prs.filter(p => statusFilter === "All" || p.status === statusFilter)
 

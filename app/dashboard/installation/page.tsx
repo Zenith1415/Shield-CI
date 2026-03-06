@@ -6,24 +6,43 @@ import { CheckCircle2, Circle, Copy, Check, Terminal, Github, Zap, Shield } from
 const yamlSnippet = `name: ShieldCI Security Scan
 
 on:
-  push:
-    branches: [main, master]
   pull_request:
     branches: [main, master]
 
 jobs:
   shieldci-scan:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
+    runs-on: self-hosted
+    timeout-minutes: 30
 
-      - name: Run ShieldCI Security Scan
-        uses: shieldci/action@v1
-        with:
-          api-key: \${{ secrets.SHIELDCI_API_KEY }}
-          repo-token: \${{ secrets.GITHUB_TOKEN }}
-          severity-threshold: medium
-          auto-pr: true`
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+
+      - name: Get PR metadata
+        id: meta
+        run: |
+          echo "repo=\${{ github.repository }}" >> "\$GITHUB_OUTPUT"
+          echo "branch=\${{ github.head_ref }}" >> "\$GITHUB_OUTPUT"
+          echo "commit=\${{ github.event.pull_request.head.sha }}" >> "\$GITHUB_OUTPUT"
+
+      - name: Run ShieldCI engine
+        id: scan
+        working-directory: \${{ env.HOME }}/Desktop/ShieldCI/tests
+        run: |
+          START_TIME=$(date +%s)
+          "\$HOME/Desktop/ShieldCI/target/release/shield-ci"
+          END_TIME=$(date +%s)
+          echo "duration=$((END_TIME - START_TIME))s" >> "\$GITHUB_OUTPUT"
+
+      - name: Push results to dashboard
+        env:
+          SHIELDCI_API_URL: \${{ secrets.SHIELDCI_API_URL }}
+          SHIELDCI_API_KEY: \${{ secrets.SHIELDCI_API_KEY }}
+          SHIELDCI_REPO: \${{ steps.meta.outputs.repo }}
+          SHIELDCI_BRANCH: \${{ steps.meta.outputs.branch }}
+          SHIELDCI_COMMIT: \${{ steps.meta.outputs.commit }}
+          SHIELDCI_DURATION: \${{ steps.scan.outputs.duration }}
+        run: python3 "\$HOME/Desktop/ShieldCI/push_results.py"`
 
 const steps = [
   {
@@ -35,22 +54,29 @@ const steps = [
   },
   {
     number: "02",
-    title: "Add your ShieldCI API Key",
-    description: "Copy your API key from Settings → API Keys and add it as a repository secret named SHIELDCI_API_KEY in your GitHub repo settings.",
-    done: true,
+    title: "Set up the self-hosted GitHub Actions runner",
+    description: "Go to your repo → Settings → Actions → Runners → New self-hosted runner. Follow the instructions to install and start the runner on your local machine.",
+    done: false,
+    icon: Shield,
+  },
+  {
+    number: "03",
+    title: "Add repository secrets",
+    description: "In your repo → Settings → Secrets → Actions, add SHIELDCI_API_URL (your dashboard URL, e.g. http://localhost:3000) and SHIELDCI_API_KEY (your API key from Settings).",
+    done: false,
     icon: Shield,
   },
   {
     number: "03",
     title: "Add the GitHub Action workflow",
-    description: "Create a file at .github/workflows/shieldci.yml in your repository and paste the configuration below.",
+    description: "Create a file at .github/workflows/shieldci.yml in your repository and paste the configuration below. This workflow uses self-hosted runner to scan on your local machine.",
     done: false,
     icon: Terminal,
   },
   {
     number: "04",
-    title: "Push a commit to trigger your first scan",
-    description: "Once the workflow file is added, push any commit to trigger ShieldCI. Your first scan result will appear in the dashboard within seconds.",
+    title: "Open a PR to trigger your first scan",
+    description: "Once the workflow is added and your runner is online, open a pull request. ShieldCI will scan the code, push results to your dashboard, and post a report as a PR comment.",
     done: false,
     icon: Zap,
   },

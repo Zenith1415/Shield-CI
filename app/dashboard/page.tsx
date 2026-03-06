@@ -22,124 +22,6 @@ import {
   ResponsiveContainer,
 } from "recharts"
 
-// ── Mock Data ──────────────────────────────────────────────
-const scoreHistory = [
-  { commit: "c1a2b", score: 42 },
-  { commit: "d3e4f", score: 48 },
-  { commit: "a7b8c", score: 51 },
-  { commit: "f1g2h", score: 58 },
-  { commit: "i3j4k", score: 63 },
-  { commit: "l5m6n", score: 70 },
-  { commit: "o7p8q", score: 73 },
-  { commit: "r9s0t", score: 79 },
-  { commit: "u1v2w", score: 85 },
-  { commit: "x3y4z", score: 91 },
-]
-
-const statCards = [
-  {
-    label: "Vulnerabilities Found",
-    value: "24",
-    icon: ShieldAlert,
-    color: "#ef4444",
-    glow: "rgba(239,68,68,0.3)",
-    bg: "rgba(239,68,68,0.08)",
-    border: "rgba(239,68,68,0.2)",
-    change: "+3 this week",
-    changeNeg: true,
-  },
-  {
-    label: "Fix PRs Raised",
-    value: "18",
-    icon: GitPullRequest,
-    color: "#a855f7",
-    glow: "rgba(168,85,247,0.3)",
-    bg: "rgba(168,85,247,0.08)",
-    border: "rgba(168,85,247,0.2)",
-    change: "+5 this week",
-    changeNeg: false,
-  },
-  {
-    label: "Scans Run",
-    value: "47",
-    icon: ScanLine,
-    color: "#3b82f6",
-    glow: "rgba(59,130,246,0.3)",
-    bg: "rgba(59,130,246,0.08)",
-    border: "rgba(59,130,246,0.2)",
-    change: "+12 this week",
-    changeNeg: false,
-  },
-  {
-    label: "PRs Merged",
-    value: "13",
-    icon: GitMerge,
-    color: "#22c55e",
-    glow: "rgba(34,197,94,0.3)",
-    bg: "rgba(34,197,94,0.08)",
-    border: "rgba(34,197,94,0.2)",
-    change: "+4 this week",
-    changeNeg: false,
-  },
-]
-
-const recentActivity = [
-  {
-    type: "vuln",
-    message: "SQL Injection detected in",
-    file: "src/db/queries.py",
-    repo: "api-service",
-    time: "2 min ago",
-    severity: "Critical",
-    sevColor: "#ef4444",
-  },
-  {
-    type: "pr",
-    message: "Fix PR #42 raised for",
-    file: "auth/middleware.js",
-    repo: "frontend",
-    time: "8 min ago",
-    severity: "High",
-    sevColor: "#f97316",
-  },
-  {
-    type: "merged",
-    message: "Fix PR #41 merged in",
-    file: "utils/sanitize.py",
-    repo: "api-service",
-    time: "24 min ago",
-    severity: "Medium",
-    sevColor: "#eab308",
-  },
-  {
-    type: "scan",
-    message: "Scan completed — 0 issues in",
-    file: "components/Button.tsx",
-    repo: "frontend",
-    time: "1 hr ago",
-    severity: "Clean",
-    sevColor: "#22c55e",
-  },
-  {
-    type: "vuln",
-    message: "Hardcoded secret detected in",
-    file: ".env.example",
-    repo: "infra",
-    time: "2 hr ago",
-    severity: "High",
-    sevColor: "#f97316",
-  },
-  {
-    type: "pr",
-    message: "Fix PR #40 raised for",
-    file: "config/database.ts",
-    repo: "api-service",
-    time: "3 hr ago",
-    severity: "Critical",
-    sevColor: "#ef4444",
-  },
-]
-
 // ── Security Score Gauge ───────────────────────────────────
 function SecurityScoreGauge({ score }: { score: number }) {
   const [displayed, setDisplayed] = useState(0)
@@ -270,6 +152,87 @@ function CustomTooltip({ active, payload, label }: any) {
 
 // ── Main Overview Page ─────────────────────────────────────
 export default function DashboardOverview() {
+  const [scoreHistory, setScoreHistory] = useState<{commit: string; score: number}[]>([])
+  const [recentActivity, setRecentActivity] = useState<any[]>([])
+  const [stats, setStats] = useState({ totalVulns: 0, totalScans: 0, cleanScans: 0, issueScans: 0 })
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch("/api/dashboard/stats")
+      .then(res => res.json())
+      .then(data => {
+        setScoreHistory(data.scoreHistory || [])
+        setRecentActivity(data.recentActivity || [])
+        setStats({
+          totalVulns: data.totalVulns || 0,
+          totalScans: data.totalScans || 0,
+          cleanScans: data.cleanScans || 0,
+          issueScans: data.issueScans || 0,
+        })
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const securityScore = stats.totalScans > 0
+    ? Math.max(0, Math.min(100, 100 - stats.totalVulns * 5))
+    : 0
+
+  const statCards = [
+    {
+      label: "Vulnerabilities Found",
+      value: String(stats.totalVulns),
+      icon: ShieldAlert,
+      color: "#ef4444",
+      glow: "rgba(239,68,68,0.3)",
+      bg: "rgba(239,68,68,0.08)",
+      border: "rgba(239,68,68,0.2)",
+      change: `${stats.totalVulns} total`,
+      changeNeg: stats.totalVulns > 0,
+    },
+    {
+      label: "Issue Scans",
+      value: String(stats.issueScans),
+      icon: GitPullRequest,
+      color: "#a855f7",
+      glow: "rgba(168,85,247,0.3)",
+      bg: "rgba(168,85,247,0.08)",
+      border: "rgba(168,85,247,0.2)",
+      change: `of ${stats.totalScans} scans`,
+      changeNeg: false,
+    },
+    {
+      label: "Scans Run",
+      value: String(stats.totalScans),
+      icon: ScanLine,
+      color: "#3b82f6",
+      glow: "rgba(59,130,246,0.3)",
+      bg: "rgba(59,130,246,0.08)",
+      border: "rgba(59,130,246,0.2)",
+      change: `${stats.cleanScans} clean`,
+      changeNeg: false,
+    },
+    {
+      label: "Clean Scans",
+      value: String(stats.cleanScans),
+      icon: GitMerge,
+      color: "#22c55e",
+      glow: "rgba(34,197,94,0.3)",
+      bg: "rgba(34,197,94,0.08)",
+      border: "rgba(34,197,94,0.2)",
+      change: `${stats.totalScans > 0 ? Math.round((stats.cleanScans / stats.totalScans) * 100) : 0}% pass rate`,
+      changeNeg: false,
+    },
+  ]
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "400px" }}>
+        <p style={{ color: "rgba(150,100,220,0.6)", fontFamily: "'Trebuchet MS', sans-serif" }}>Loading dashboard...</p>
+      </div>
+    )
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
 
@@ -304,7 +267,7 @@ export default function DashboardOverview() {
           gap: "8px",
           boxShadow: "0 0 40px rgba(106,13,173,0.1)",
         }}>
-          <SecurityScoreGauge score={91} />
+          <SecurityScoreGauge score={securityScore} />
 
           <div style={{
             width: "100%",

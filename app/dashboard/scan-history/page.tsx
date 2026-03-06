@@ -1,21 +1,7 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { ScanLine, Clock, GitCommit, CheckCircle2, AlertTriangle, XCircle } from "lucide-react"
-
-const scans = [
-  { id: 1, repo: "api-service", branch: "main", commit: "a1b2c3d", message: "fix: update user auth", vulnsFound: 2, duration: "14s", status: "Issues Found", triggered: "2 min ago" },
-  { id: 2, repo: "frontend", branch: "feat/login", commit: "e5f6g7h", message: "feat: add login page", vulnsFound: 1, duration: "9s", status: "Issues Found", triggered: "8 min ago" },
-  { id: 3, repo: "api-service", branch: "main", commit: "i9j0k1l", message: "refactor: clean queries", vulnsFound: 0, duration: "11s", status: "Clean", triggered: "24 min ago" },
-  { id: 4, repo: "infra", branch: "main", commit: "m2n3o4p", message: "chore: update env example", vulnsFound: 1, duration: "6s", status: "Issues Found", triggered: "2 hr ago" },
-  { id: 5, repo: "api-service", branch: "fix/db-conn", commit: "q5r6s7t", message: "fix: database config", vulnsFound: 0, duration: "13s", status: "Clean", triggered: "3 hr ago" },
-  { id: 6, repo: "frontend", branch: "main", commit: "u8v9w0x", message: "fix: form validation", vulnsFound: 0, duration: "8s", status: "Clean", triggered: "5 hr ago" },
-  { id: 7, repo: "infra", branch: "main", commit: "y1z2a3b", message: "chore: docker updates", vulnsFound: 1, duration: "5s", status: "Issues Found", triggered: "1 day ago" },
-  { id: 8, repo: "api-service", branch: "main", commit: "c4d5e6f", message: "feat: user endpoints", vulnsFound: 1, duration: "16s", status: "Issues Found", triggered: "1 day ago" },
-  { id: 9, repo: "frontend", branch: "main", commit: "g7h8i9j", message: "refactor: auth hooks", vulnsFound: 1, duration: "10s", status: "Issues Found", triggered: "2 days ago" },
-  { id: 10, repo: "infra", branch: "main", commit: "k0l1m2n", message: "fix: nginx config", vulnsFound: 0, duration: "4s", status: "Clean", triggered: "2 days ago" },
-  { id: 11, repo: "api-service", branch: "main", commit: "n3o4p5q", message: "chore: dependency update", vulnsFound: 0, duration: "12s", status: "Clean", triggered: "3 days ago" },
-  { id: 12, repo: "frontend", branch: "main", commit: "r6s7t8u", message: "feat: dashboard UI", vulnsFound: 0, duration: "9s", status: "Clean", triggered: "3 days ago" },
-]
 
 const statusConfig: Record<string, { color: string; bg: string; border: string; icon: any }> = {
   "Issues Found": { color: "#f97316", bg: "rgba(249,115,22,0.1)", border: "rgba(249,115,22,0.25)", icon: AlertTriangle },
@@ -23,13 +9,49 @@ const statusConfig: Record<string, { color: string; bg: string; border: string; 
   "Failed":       { color: "#ef4444", bg: "rgba(239,68,68,0.1)",  border: "rgba(239,68,68,0.25)",  icon: XCircle       },
 }
 
-const repoColors: Record<string, string> = {
-  "api-service": "#a855f7",
-  "frontend":    "#3b82f6",
-  "infra":       "#22c55e",
+const repoColorPalette = ["#a855f7", "#3b82f6", "#22c55e", "#f97316", "#ef4444", "#eab308"]
+
+function timeAgo(dateStr: string): string {
+  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
+  if (seconds < 60) return `${seconds}s ago`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes} min ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} hr ago`
+  const days = Math.floor(hours / 24)
+  return `${days} day${days > 1 ? "s" : ""} ago`
 }
 
 export default function ScanHistoryPage() {
+  const [scans, setScans] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch("/api/scans")
+      .then(res => res.json())
+      .then(data => {
+        const mapped = (data.scans || []).map((s: any, i: number) => ({
+          id: s._id || i + 1,
+          repo: s.repo || "",
+          branch: s.branch || "main",
+          commit: s.commit || "",
+          message: s.commitMessage || "",
+          vulnsFound: s.vulnsFound || 0,
+          duration: s.duration || "",
+          status: s.status || "Clean",
+          triggered: s.createdAt ? timeAgo(s.createdAt) : "",
+        }))
+        setScans(mapped)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  // Build dynamic repo color map
+  const repoColors: Record<string, string> = {}
+  const uniqueRepos = Array.from(new Set(scans.map(s => s.repo).filter(Boolean)))
+  uniqueRepos.forEach((r, i) => { repoColors[r] = repoColorPalette[i % repoColorPalette.length] })
+
   const totalScans   = scans.length
   const cleanScans   = scans.filter(s => s.status === "Clean").length
   const issueScans   = scans.filter(s => s.status === "Issues Found").length

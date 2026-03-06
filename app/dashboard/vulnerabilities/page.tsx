@@ -1,20 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { ShieldAlert, Filter } from "lucide-react"
-
-const vulnerabilities = [
-  { id: 1, repo: "api-service", file: "src/db/queries.py", line: 42, type: "SQL Injection", severity: "Critical", commit: "a1b2c3d", status: "Fix PR Raised", date: "2 min ago" },
-  { id: 2, repo: "frontend", file: "auth/middleware.js", line: 18, type: "XSS", severity: "High", commit: "e5f6g7h", status: "Pending", date: "8 min ago" },
-  { id: 3, repo: "api-service", file: "utils/sanitize.py", line: 91, type: "Path Traversal", severity: "Medium", commit: "i9j0k1l", status: "Resolved", date: "24 min ago" },
-  { id: 4, repo: "infra", file: ".env.example", line: 7, type: "Hardcoded Secret", severity: "High", commit: "m2n3o4p", status: "Fix PR Raised", date: "2 hr ago" },
-  { id: 5, repo: "api-service", file: "config/database.ts", line: 33, type: "Insecure Auth", severity: "Critical", commit: "q5r6s7t", status: "Pending", date: "3 hr ago" },
-  { id: 6, repo: "frontend", file: "components/Form.tsx", line: 76, type: "CSRF", severity: "Medium", commit: "u8v9w0x", status: "Resolved", date: "5 hr ago" },
-  { id: 7, repo: "infra", file: "docker-compose.yml", line: 12, type: "Exposed Port", severity: "Low", commit: "y1z2a3b", status: "Pending", date: "1 day ago" },
-  { id: 8, repo: "api-service", file: "routes/user.py", line: 55, type: "IDOR", severity: "High", commit: "c4d5e6f", status: "Fix PR Raised", date: "1 day ago" },
-  { id: 9, repo: "frontend", file: "hooks/useAuth.ts", line: 29, type: "Token Exposure", severity: "Critical", commit: "g7h8i9j", status: "Resolved", date: "2 days ago" },
-  { id: 10, repo: "infra", file: "nginx.conf", line: 4, type: "Misconfiguration", severity: "Low", commit: "k0l1m2n", status: "Pending", date: "2 days ago" },
-]
 
 const severityConfig: Record<string, { color: string; bg: string; border: string }> = {
   Critical: { color: "#ef4444", bg: "rgba(239,68,68,0.12)", border: "rgba(239,68,68,0.3)" },
@@ -29,10 +16,46 @@ const statusConfig: Record<string, { color: string; bg: string }> = {
   "Resolved":      { color: "#22c55e", bg: "rgba(34,197,94,0.12)"  },
 }
 
+function timeAgo(dateStr: string): string {
+  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
+  if (seconds < 60) return `${seconds}s ago`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes} min ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} hr ago`
+  const days = Math.floor(hours / 24)
+  return `${days} day${days > 1 ? "s" : ""} ago`
+}
+
 export default function VulnerabilitiesPage() {
+  const [vulnerabilities, setVulnerabilities] = useState<any[]>([])
   const [severityFilter, setSeverityFilter] = useState("All")
   const [statusFilter, setStatusFilter]     = useState("All")
   const [repoFilter, setRepoFilter]         = useState("All")
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch("/api/vulnerabilities")
+      .then(res => res.json())
+      .then(data => {
+        const vulns = (data.vulnerabilities || []).map((v: any, i: number) => ({
+          id: v._id || i + 1,
+          repo: v.repo || "",
+          file: v.file || "",
+          line: v.line || 0,
+          type: v.type || "Unknown",
+          severity: v.severity || "Medium",
+          commit: v.commit || "",
+          status: v.status || "Pending",
+          date: v.createdAt ? timeAgo(v.createdAt) : "",
+        }))
+        setVulnerabilities(vulns)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const repos = Array.from(new Set(vulnerabilities.map(v => v.repo).filter(Boolean)))
 
   const filtered = vulnerabilities.filter(v =>
     (severityFilter === "All" || v.severity === severityFilter) &&
@@ -89,7 +112,7 @@ export default function VulnerabilitiesPage() {
         <div style={{ width: "1px", height: "20px", background: "rgba(90,11,145,0.25)" }} />
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           <span style={{ fontSize: "12px", color: "rgba(150,100,220,0.5)", fontFamily: "'Trebuchet MS', sans-serif" }}>Repo:</span>
-          {["All","api-service","frontend","infra"].map(r => <FilterBtn key={r} label={r} value={r} current={repoFilter} setter={setRepoFilter} />)}
+          {["All",...repos].map(r => <FilterBtn key={r} label={r} value={r} current={repoFilter} setter={setRepoFilter} />)}
         </div>
       </div>
 
